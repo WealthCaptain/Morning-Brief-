@@ -1,0 +1,32 @@
+name: Morning Brief
+
+   on:
+     schedule:
+       - cron: '0 21 * * *'
+     workflow_dispatch:
+
+   jobs:
+     send-brief:
+       runs-on: ubuntu-latest
+       steps:
+         - name: Get the files
+           uses: actions/checkout@v4
+
+         - name: Set up Python
+           uses: actions/setup-python@v5
+           with:
+             python-version: '3.12'
+
+         - name: Install dependencies
+           run: pip install -r requirements.txt
+
+         - name: Generate and send the brief
+           env:
+             ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+             SMTP_HOST: smtp.gmail.com
+             SMTP_PORT: '465'
+             SMTP_USER: ${{ secrets.SMTP_USER }}
+             SMTP_PASS: ${{ secrets.SMTP_PASS }}
+             EMAIL_TO: ${{ secrets.EMAIL_TO }}
+             BRIEF_MODEL: claude-sonnet-4-6
+           run: python morning_brief.py
