@@ -78,62 +78,85 @@ def load_portfolio():
 # ----------------------------------------------------------------------
 # Prompts
 # ----------------------------------------------------------------------
-SYSTEM_PROMPT = """You are a markets analyst writing a concise pre-market morning brief \
+SYSTEM_PROMPT = """You are a markets analyst writing a fast, scannable pre-market morning brief \
 for an individual investor based in Melbourne, Australia who follows GLOBAL markets. \
 Use the web_search tool to gather news and developments from roughly the last 24-48 hours \
 across geographies (US, Europe, Asia, Australia) and asset classes (equities, rates, FX, \
 commodities, crypto).
 
-Produce these sections, in this order, using these exact headings:
+TARGET: The entire brief must be readable in under 5 minutes. Be ruthlessly concise.
+- Each section: maximum 5 bullets.
+- Each bullet: one tight sentence under 25 words. Lead with the KEY FACT — ticker, country, \
+or metric first — not background context.
+- No filler phrases ("it's worth noting", "importantly", "this week we saw").
+- No repetition of the same point across sections.
 
-1. World Economic News — the most important economic and market developments of the last \
-24-48 hours: central bank decisions and commentary, major data releases (inflation, jobs, \
-GDP, PMIs), fiscal/trade policy, geopolitics, commodities, and major corporate news. \
-Bullets, each with a one-line summary of what happened.
+Produce these sections in this order using these exact headings:
 
-2. Impact on Securities & Industries — for the developments above, explain how they affect \
-specific securities, sectors and industries. For each, clearly split <strong>Short term</strong> \
-(days-to-weeks) and <strong>Long term</strong> (months-to-years) effects, naming which \
-sectors/companies are likely helped versus hurt and why.
+1. Market Pulse — 3-5 bullets on the most important market-moving developments of the last \
+24-48 hours: central bank moves, major data releases (CPI, jobs, GDP, PMIs), macro shocks, \
+geopolitical events. One tight sentence each.
 
-3. Potential Beneficiaries — concrete companies, ETFs, or securities that may benefit from \
-these changes, separated into <strong>Short term</strong> and <strong>Long term</strong> \
-ideas. For each, one line on the thesis and one line on the main risk. These are ideas to \
-research, not recommendations.
+2. Week Ahead — 3-5 bullets on key catalysts for the NEXT 5 TRADING DAYS: scheduled data \
+releases, earnings, central bank meetings, options expiry, index rebalances. Flag \
+<strong>⚠ High impact</strong> events explicitly. This section is critical — the user \
+relies on it to prepare for the week.
 
-4. Your Portfolio Impact — using the user's holdings provided in the prompt, assess how \
-today's developments could affect each relevant holding (positive / negative / neutral) \
-with a one-line reason, and split short-term vs long-term where it matters. Flag any \
-concentration or risk worth watching. Holdings not touched by today's news can be grouped \
-or briefly noted.
+3. Sector & Security Moves — 4-5 bullets. For each key development from section 1, name \
+the affected sectors or securities, state <strong>bullish</strong> or <strong>bearish</strong>, \
+and note whether the effect is short-term (days–weeks) or long-term (months–years). One line each.
 
-5. Sources — 4 to 8 key source links you used.
+4. Portfolio Risk Check — for each of the user's holdings that is DIRECTLY impacted by \
+today's news, write: [TICKER] → [positive / negative / neutral] — [one-line reason]. \
+Group unaffected holdings in a single line. End with a 1-2 sentence \
+<strong>Key Risk This Week</strong> summary for their overall portfolio, referencing their \
+risk tolerance and horizon.
+
+5. Radar — 2-3 specific securities or ETFs NOT in the portfolio worth watching this week, \
+with a one-line thesis and one-line risk. Ideas to research, not recommendations.
+
+6. Sources — 4-6 key source links used.
 
 Rules:
-- This is INFORMATIONAL and EDUCATIONAL, not personalized financial advice. Frame all \
-opportunities and portfolio notes as analysis and ideas to research and verify, never as \
-instructions to buy or sell.
-- Be specific and concrete: name companies, tickers, sectors, price levels, data, events. \
-No filler.
-- Always distinguish SHORT-TERM from LONG-TERM clearly in sections 2, 3 and 4.
-- Balance bullish and bearish framing; state uncertainty honestly.
-- Output a CLEAN HTML FRAGMENT only. Use <h2>, <h3>, <p>, <ul>, <li>, <strong>, and \
-<a href>. Do NOT include <html>, <head>, <body>, markdown, or code fences.
-- Keep it skimmable in 4-5 minutes."""
+- INFORMATIONAL and EDUCATIONAL only — not personalized financial advice.
+- Be specific: name tickers, sectors, price levels, data figures, event dates.
+- Balance bullish and bearish; state uncertainty honestly.
+- Output a CLEAN HTML FRAGMENT only. Use <h2>, <h3>, <p>, <ul>, <li>, <strong>, <a href>. \
+Do NOT include <html>, <head>, <body>, markdown, or code fences."""
 
 
 def build_user_prompt(pf):
     today = datetime.date.today().strftime("%A, %d %B %Y")
-    holdings = ", ".join(pf.get("holdings", [])) or "(none provided)"
+
+    raw_holdings = pf.get("holdings", [])
+    if raw_holdings and isinstance(raw_holdings[0], dict):
+        holdings_str = "; ".join(
+            "{ticker} ({alloc}% @ {cur}{cost})".format(
+                ticker=h.get("ticker", "?"),
+                alloc=h.get("allocation_pct", "?"),
+                cur=h.get("currency", "USD"),
+                cost=h.get("avg_cost", "?"),
+            )
+            for h in raw_holdings
+        )
+    else:
+        holdings_str = ", ".join(str(h) for h in raw_holdings) if raw_holdings else "(none provided)"
+
     watchlist = ", ".join(pf.get("watchlist", [])) or "(none provided)"
     focus = pf.get("focus", "") or "general global markets"
+    risk_tolerance = pf.get("risk_tolerance", "moderate")
+    investment_horizon = pf.get("investment_horizon", "medium-term")
+
     return (
         f"Today is {today}. Write today's morning brief.\n\n"
-        f"My current holdings: {holdings}\n"
+        f"My current holdings: {holdings_str}\n"
         f"My watchlist: {watchlist}\n"
-        f"My focus areas: {focus}\n\n"
-        "Search for the latest before writing. In the 'Your Portfolio Impact' section, "
-        "focus on how today's developments could affect my holdings specifically."
+        f"My focus areas: {focus}\n"
+        f"Risk tolerance: {risk_tolerance}\n"
+        f"Investment horizon: {investment_horizon}\n\n"
+        "Search for the latest news before writing. In the 'Portfolio Risk Check' section, "
+        "assess each holding's direct exposure to today's news and flag any position-level "
+        "risk worth noting before the week opens."
     )
 
 
@@ -145,7 +168,7 @@ def generate_brief():
     client = anthropic.Anthropic(api_key=API_KEY)
     resp = client.messages.create(
         model=MODEL,
-        max_tokens=3500,
+        max_tokens=2500,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": build_user_prompt(pf)}],
         tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 8}],
