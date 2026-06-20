@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Schedules the morning brief to run every day at 7:00 AM.
+
+  BEFORE USING: replace the two /Users/YOURNAME/... paths below with your real paths.
+    - First ProgramArguments entry = path to the python inside your virtual env
+    - Second entry = full path to morning_brief.py
+  Then install it (see README.md):
+    cp com.user.morningbrief.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.user.morningbrief.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.morningbrief</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/YOURNAME/morning-brief/venv/bin/python3</string>
+        <string>/Users/YOURNAME/morning-brief/morning_brief.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/YOURNAME/morning-brief</string>
+
+    <!-- Run daily at 07:00. Change Hour/Minute to taste. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>7</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <!-- If the Mac was asleep at 7am, run as soon as it wakes. -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <!-- Logs for troubleshooting -->
+    <key>StandardOutPath</key>
+    <string>/Users/YOURNAME/morning-brief/run.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/YOURNAME/morning-brief/error.log</string>
+</dict>
+</plist>
